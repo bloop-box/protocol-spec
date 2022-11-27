@@ -1,7 +1,5 @@
 # Protocol Specification
 
-This document outlines the the protocol used by Bloop Boxes to communicate with the server software. As every convention has different requirements on their server end, especially when it comes to handling achievements and such, the Bloop Box project does not provide a generic server, but instead specifies the protocol to be implemented on your end.
-
 Bloop Boxes use a binary protocol to communicate, layered over a TLS stream. The protocol is synchronous and split into individual request-response packages. Each package begins with a single byte denoting the type of the request or response.
 
 ## Authentication
@@ -20,15 +18,11 @@ When the Bloop Box detects an NFC tag, it sends a `\x00` byte followed by the se
 
 The server then processes the bloop on its side and responds with one of the following:
 
-| Code   | Description                                                                   |
-| ------ | ----------------------------------------------------------------------------- |
-| `\x00` | Serial number is not registered on the server.                                |
-| ------ | ----------------------------------------------------------------------------- |
-| `\x01` | Serial number is registered and bloop was acknowledged. This response is      |
-|        | followed by a single UINT8 specifiyng the number of new achievements. For     |
-|        | each achievement , its ID should be returned, which is a 20 byte binary hash. |
-| ------ | ----------------------------------------------------------------------------- |
-| `\x02` | Serial number is registered but the server enforced throttling.               |
+| Code   | Description                                                                                                                                                                                                                     |
+|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `\x00` | Serial number is not registered on the server.                                                                                                                                                                                  |
+| `\x01` | Serial number is registered and bloop was acknowledged. This response is followed by a single UINT8 specifying the number of new achievements. For each achievement, its ID should be returned, which is a 20 byte binary hash. |
+| `\x02` | Serial number is registered but the server enforced throttling.                                                                                                                                                                 |
 
 ## Retrieving audio
 
@@ -38,12 +32,10 @@ When the client receives a new achievement ID for which it doesn't have the audi
 
 The server then responds with one of the following:
 
-| Code   | Description                                                                   |
-| ------ | ----------------------------------------------------------------------------- |
-| `\x00` | Achievement ID is not known or no audio file exists.                          |
-| ------ | ----------------------------------------------------------------------------- |
-| `\x01` | Audio file is found. This code is followed by a UINT32LE specifiyng the       |
-|        | length of the audio data, followed by the actual data.                        |
+| Code   | Description                                                                                                                    |
+|--------|--------------------------------------------------------------------------------------------------------------------------------|
+| `\x00` | Achievement ID is not known or no audio file exists.                                                                           |
+| `\x01` | Audio file is found. This code is followed by a UINT32LE specifying the length of the audio data, followed by the actual data. |
 
 ## Ping
 
