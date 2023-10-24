@@ -1,43 +1,143 @@
-# Protocol Specification
+# Bloop Protocol Specification
 
-Bloop Boxes use a binary protocol to communicate, layered over a TLS stream. The protocol is synchronous and split into individual request-response packages. Each package begins with a single byte denoting the type of the request or response.
+Version: 2 (2023-10-24)
+
+Bloop Boxes use a binary protocol to communicate, layered over a TLS stream. The protocol is synchronous and split into
+individual request-response packages.
+
+## Changelog
+
+### Version 2:
+
+- Authentication message format adjusted and local IP address added
+- Achievement IDs changed to UUIDs
+- Quit message added
+
+## Types
+
+The following types are used in this protocol:
+
+| Type        | Description                                                              |
+|-------------|--------------------------------------------------------------------------|
+| `uint8`     | Single byte unsigned integer                                             |
+| `uint32_le` | Four byte unsigned integer                                               |
+| `ip_addr`   | Type `uint8` (`4` or `6`) followed by respectively 4 or 16 bytes         |
+| `string`    | Type `uint8` followed by the respective number of bytes as UTF-8 string. |
+| `bytes`     | Type `uint32_le` followed by the respective number of bytes.             |
+| `nfc_uid`   | 7 byte NFC UID                                                           |
+| `uuid`      | 16 byte UUID                                                             |
+
+## Message format
+
+All messages except the authentication in this protocol have the following format:
+
+```
+uint8   Message type
+uint8[] Optional payload. The length must be inferred from the message type and payload contents.
+```
+
+A client must not send a new request until it received a response from the server.
 
 ## Authentication
 
-Right after the connection is established, the client tries to authenticate against the server. This is done by sending a client ID and a secret, separated by a colon. The authentication string is prefixed by a UINT8 denoting the length of the string.
+After the connection is established, the client must send its credentials and local IP address in order to authenticate
+with the server. The authentication message has the following format:
 
-> Example: `\x07foo:bar`
+```
+string  Client ID
+string  Secret
+ip_addr Local IP address
+```
 
-The server should respond either with a `\x00` byte on authentication failure or `\x01` on success.
+The server must respond with one of the following messages:
 
-## Blooping
+```
+\0x00   Authentication failed
+```
 
-When the Bloop Box detects an NFC tag, it sends a `\x00` byte followed by the serial number of the NFC chip (7 bytes) to the server.
+```
+\0x01   Authentication succeeded
+```
 
-> Example: `\x00\xff\xff\xff\xff\xff\xff\xff`
+## Messages
 
-The server then processes the bloop on its side and responds with one of the following:
+### Blooping
 
-| Code   | Description                                                                                                                                                                                                                     |
-|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `\x00` | Serial number is not registered on the server.                                                                                                                                                                                  |
-| `\x01` | Serial number is registered and bloop was acknowledged. This response is followed by a single UINT8 specifying the number of new achievements. For each achievement, its ID should be returned, which is a 20 byte binary hash. |
-| `\x02` | Serial number is registered but the server enforced throttling.                                                                                                                                                                 |
+This message is send when the client detects an NFC tag.
 
-## Retrieving audio
+#### Request
 
-When the client receives a new achievement ID for which it doesn't have the audio file stored yet, it will issue an `\x01` command to the server followed by the achievement ID (20 bytes).
+```
+\x00    NFC tag detected
+nfc_uid UID of the scanned tag
+```
 
-> Example: `\x01\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\…`
+#### Responses
 
-The server then responds with one of the following:
+```
+\x00    UID is not registered
+```
 
-| Code   | Description                                                                                                                    |
-|--------|--------------------------------------------------------------------------------------------------------------------------------|
-| `\x00` | Achievement ID is not known or no audio file exists.                                                                           |
-| `\x01` | Audio file is found. This code is followed by a UINT32LE specifying the length of the audio data, followed by the actual data. |
+```
+\x01    UID is registered
+uint8   Number of achievements
+uuid[]  Array of achievement IDs
+```
 
-## Ping
+```
+\x02    UID is registered but server enforced throttling
+```
 
-In order to check connectivity, the client will periodically send a ping to the server. This is done by sending an `\x02` byte. The server should respond with an `\x00` byte.
+### Retrieving audio
 
+When the client receives a new achievement ID for which it doesn't have the audio file stored, it should issue the
+following message:
+
+#### Request
+
+```
+\x01    Achievement audio request
+uuid    Achievement ID
+```
+
+#### Responses
+
+```
+\x00    Achievement ID unknown or audio file missing
+```
+
+```
+\x01    Audio file found
+bytes   Audio file payload (MP3 format)
+```
+
+### Ping
+
+Periodically the client should send a ping to the server to verify connectivity.
+
+#### Request
+
+```
+\x02    Ping
+```
+
+#### Response
+
+```
+\x00    Pong
+```
+
+### Closing connection
+
+To facilitate a clean shutdown of the connection, the client should inform the server when it is shutting down.
+
+#### Request
+
+```
+\x03    Quit
+```
+
+#### Response
+
+No response will be sent by the server. Instead, it will close the socket immediately. The client should do the same
+after sending the request.
